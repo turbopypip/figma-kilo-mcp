@@ -5,7 +5,7 @@ import { figmaAction } from '../extension/dom.js';
 
 // A genuinely virtual tree: only three rows exist at a time. Expanding changes
 // indices; scrolling unmounts parents; selecting updates inspector properties.
-function fixture({ interrupt = false, inspectorDelay = 0 } = {}) {
+function fixture({ interrupt = false, inspectorDelay = 0, colors = {}, initialExpanded = [] } = {}) {
   const tree = [
     { id: 'root', level: 0, children: true },
     { id: 'group', level: 1, children: true, parent: 'root' },
@@ -14,7 +14,7 @@ function fixture({ interrupt = false, inspectorDelay = 0 } = {}) {
     { id: 'c', level: 1, parent: 'root' },
     { id: 'outside', level: 0, children: true },
   ];
-  const expanded = new Set(), selections = [], scrolls = [];
+  const expanded = new Set(initialExpanded), selections = [], scrolls = [];
   let inspector = 'root', inspectorAt = 0;
   let selected = 'root', top = 0, now = 0, interrupted = false;
   const visible = () => tree.filter(item => !item.parent || (expanded.has(item.parent) && (item.parent !== 'group' || expanded.has('root'))));
@@ -23,6 +23,7 @@ function fixture({ interrupt = false, inspectorDelay = 0 } = {}) {
     get scrollTop() { return top; }, set scrollTop(value) { top = Math.max(0, Math.min(value, this.scrollHeight - 60)); scrolls.push(top); } };
   const panel = { parentElement: scroll, clientHeight: 0 };
   const row = item => ({
+    style: { color: colors[item.id] || '' },
     getAttribute: key => ({ 'data-fpl-selected-root': String(selected === item.id), 'aria-level': String(item.level), 'aria-expanded': item.children ? String(expanded.has(item.id)) : null })[key] ?? null,
     hasAttribute: key => key === 'aria-expanded' && item.children,
     querySelector: selector => selector.includes('-layers-panel-row') ? { getAttribute: () => `${item.id}-layers-panel-row`, innerText: item.id }
@@ -121,4 +122,54 @@ test('adaptive inspection waits for delayed properties instead of attaching prev
   for (const node of result.nodes) assert.equal(node.properties[0].text, `Width of ${node.id}`);
   assert.equal(result.traversal.complete, true);
   assert.ok(result.traversal.elapsedMs > 0);
+});
+
+
+test('hidden ordinary layers and instances are skipped without selection or expansion', async () => {
+  for (const color of ['var(--color-text-disabled)', 'var(--color-text-component-tertiary)']) {
+    for (const initialExpanded of [[], ['root', 'group']]) {
+      const f = fixture({ colors: { group: color }, initialExpanded });
+      const { result, error } = await f.run({ depth: 4, maxNodes: 20 });
+      assert.equal(error, undefined);
+      assert.deepEqual(Array.from(result.nodes, n => n.id), ['root', 'c']);
+      assert.equal(result.nodes[1].parentId, 'root');
+      assert.equal(result.traversal.complete, true);
+      assert.equal(result.traversal.skipped[0].nodeId, 'group');
+      assert.ok(!f.selections.some(id => ['group', 'a', 'b'].includes(id)));
+      if (!initialExpanded.length) assert.ok(!f.expanded.has('group'));
+    }
+  }
+});
+
+test('unknown styles remain readable and a hidden leaf does not hide its siblings', async () => {
+  const f = fixture({ colors: { group: 'var(--new-unknown-style)', a: 'var(--color-text-disabled)' } });
+  const { result } = await f.run({ depth: 4, maxNodes: 20 });
+  assert.deepEqual(Array.from(result.nodes, n => n.id), ['root', 'group', 'b', 'c']);
+  assert.equal(result.nodes[2].parentId, 'group');
+});
+
+test('hidden root returns an explicit empty result without reading its inspector or expanding', async () => {
+  const f = fixture({ colors: { root: 'var(--color-text-disabled)' } });
+  const { result, error } = await f.run({ depth: 4, maxNodes: 20 });
+  assert.equal(error, undefined);
+  assert.equal(result.nodeCount, 0);
+  assert.equal(result.properties.length, 0);
+  assert.equal(result.traversal.skipped[0].nodeId, 'root');
+  assert.equal(f.expanded.size, 0);
+  assert.equal(f.selections.length, 0);
+});
+
+test('continuation proceeds past hidden branches without spending node budget on them', async () => {
+  const f = fixture({ colors: { group: 'var(--color-text-disabled)' } });
+  const first = await f.run({ depth: 4, maxNodes: 1 });
+  assert.equal(first.result.traversal.nextRequest.afterNodeId, 'root');
+  const second = await f.run(first.result.traversal.nextRequest);
+  assert.deepEqual(Array.from(second.result.nodes, n => n.id), ['root', 'c']);
+  assert.equal(second.result.traversal.complete, true);
+});
+
+test('lightweight snapshot excludes already expanded hidden descendants', async () => {
+  const f = fixture({ colors: { group: 'var(--color-text-disabled)' }, initialExpanded: ['root','group'] });
+  const { result } = await f.run({ autoTraverse: false, depth: 4, maxNodes: 20 });
+  assert.equal(result.visibleDescendants.length, 0);
 });

@@ -18,6 +18,7 @@ export async function figmaAction(method, params, fileKey) {
       const item = row.querySelector('[data-testid$="-layers-panel-row"]');
       return { id: item.getAttribute('data-testid').replace(/-layers-panel-row$/, ''),
         name: item.innerText.trim().slice(0, 500), type: row.querySelector('[role="img"][aria-label]')?.getAttribute('aria-label') || 'UNKNOWN',
+        hidden: /^var\(\s*--color-text-(?:disabled|component-tertiary)\s*\)$/.test(row.style?.color || ''),
         level: Number(row.getAttribute('aria-level')), expanded: row.getAttribute('aria-expanded') === 'true',
         hasChildren: row.hasAttribute('aria-expanded') };
     };
@@ -159,6 +160,15 @@ export async function figmaAction(method, params, fileKey) {
       activate(command); return { result: node };
     }
     if (method === 'get_design_context') {
+      // UI visibility marker, not DOM visibility: hidden canvas layers still have rows.
+      if (node.hidden) return { result: {
+        adapter: 'chrome-dom', fileKey, node, properties: [], nodes: [], nodeCount: 0,
+        visibleDescendants: [], truncated: true, childrenTruncated: false,
+        traversal: { complete: true, pending: [], reasons: [], nextRequest: null,
+          skipped: [{ nodeId: node.id, reason: 'hidden-layer', subtree: true }] },
+        guidance: 'Selected layer is hidden according to the Layers UI. Its properties and subtree were skipped.'
+      } };
+
       const propertiesTab = [...document.querySelectorAll('[role="tab"]')].find(el => label(el) === 'Properties');
       if (!propertiesTab) throw new Error('Properties tab is unavailable in this file.');
       if (propertiesTab.getAttribute('aria-selected') !== 'true') {
@@ -168,7 +178,8 @@ export async function figmaAction(method, params, fileKey) {
       if (params.autoTraverse !== false) {
         const depth = Math.min(12, Math.max(0, params.depth ?? 4));
         const maxNodes = Math.min(500, Math.max(1, params.maxNodes ?? 200));
-        const nodes = [], reasons = [], pending = [], stack = [];
+        const nodes = [], reasons = [], pending = [], stack = [], skipped = [];
+        let hiddenLevel = null;
         const visited = new Set();
         let resuming = Boolean(params.afterNodeId), lastReadId = params.afterNodeId || null;
         let expectedId = node.id, complete = false, textLength = 0, restoreSelection = true;
@@ -237,6 +248,17 @@ export async function figmaAction(method, params, fileKey) {
             if (info.id !== node.id && info.level <= node.level) { complete = true; break; }
             if (visited.has(info.id)) throw new Error('Layers traversal repeated a row; stopped to avoid skipping nodes.');
             visited.add(info.id);
+            if (hiddenLevel !== null && info.level <= hiddenLevel) hiddenLevel = null;
+            if (info.hidden || hiddenLevel !== null) {
+              if (hiddenLevel === null) {
+                hiddenLevel = info.level;
+                skipped.push({ nodeId: info.id, reason: 'hidden-layer', subtree: true });
+              }
+              if (info.id === params.afterNodeId) resuming = false;
+              current = await nextRow(info.id);
+              if (!current) complete = true;
+              continue;
+            }
             const relativeDepth = info.level - node.level;
             if (relativeDepth <= depth) {
               while (stack.length && stack.at(-1).level >= info.level) stack.pop();
@@ -295,7 +317,7 @@ export async function figmaAction(method, params, fileKey) {
         const childrenTruncated = !complete || pending.length > 0;
         return { result: { adapter: 'chrome-dom', fileKey, node: nodes[0], properties: nodes[0].properties,
           nodes, visibleDescendants: nodes.slice(1).map(({ properties, ...info }) => info), nodeCount: nodes.length,
-          truncated: true, childrenTruncated, traversal: { elapsedMs: Date.now() - started, complete: !childrenTruncated, restoredSelection: restored, pending, reasons,
+          truncated: true, childrenTruncated, traversal: { elapsedMs: Date.now() - started, complete: !childrenTruncated, restoredSelection: restored, pending, reasons, skipped,
             nextRequest: !complete && !resuming && lastReadId && restoreSelection ? { nodeId: node.id, autoTraverse: true, depth, maxNodes: Math.max(2, maxNodes), afterNodeId: lastReadId } : null },
           truncations: [...reasons, ...pending.map(item => `${item.reason}: ${item.nodeId}`)],
           unavailable: ['properties not exposed by the inspector', 'absolute geometry', 'text style ranges not shown in inspector', 'variable definitions'],
@@ -308,7 +330,13 @@ export async function figmaAction(method, params, fileKey) {
       }
       const all = rows().map(describe), index = all.findIndex(row => row.id === node.id);
       const descendants = [];
+      let hiddenLevel = null;
       for (let i = index + 1; i < all.length && all[i].level > node.level; i++) {
+        if (hiddenLevel !== null && all[i].level <= hiddenLevel) hiddenLevel = null;
+        if (all[i].hidden || hiddenLevel !== null) {
+          if (hiddenLevel === null) hiddenLevel = all[i].level;
+          continue;
+        }
         if (all[i].level - node.level <= params.depth && descendants.length < params.maxNodes - 1) descendants.push(all[i]);
       }
       const panels = [...document.querySelectorAll('[data-testid$="inspection-panel"]')].filter(visible)
