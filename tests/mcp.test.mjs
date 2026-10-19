@@ -25,11 +25,22 @@ test('real stdio MCP session: discovery, context, image, disk export, EOF cleanu
   assert.equal(absent.isError, true); assert.match(absent.content[0].text, /not connected/);
   const invalid = await client.callTool({ name: 'get_design_context', arguments: { depth: 100 } });
   assert.equal(invalid.isError, true);
-  const ws = await pair(port, secret, mockBrowser); t.after(() => ws.terminate());
+  const ws = await pair(port, secret, (method, params) => {
+    assert.equal(params.variablesFile, undefined);
+    const result = mockBrowser(method, params);
+    return method === 'get_design_context' ? { ...result, layout: { css: {gap:'32px'} } } : result;
+  }); t.after(() => ws.terminate());
   const selection = await client.callTool({ name: 'get_selection', arguments: {} });
   assert.equal(JSON.parse(selection.content[0].text).nodes[0].id, '1:1');
   const context = await client.callTool({ name: 'get_design_context', arguments: {} });
   assert.equal(JSON.parse(context.content[0].text).nodeCount, 2);
+  const variablesFile = path.join(dir, 'variables.scss');
+  await writeFile(variablesFile, ':root { --mimir-space-2xl: 32px; }');
+  const mapped = await client.callTool({ name: 'get_design_context', arguments: { variablesFile } });
+  assert.equal(JSON.parse(mapped.content[0].text).layout.css.gap, 'var(--mimir-space-2xl)');
+  await writeFile(variablesFile, ':root { --mimir-space-2xl: 40px; }');
+  const refreshed = await client.callTool({ name: 'get_design_context', arguments: { variablesFile } });
+  assert.equal(JSON.parse(refreshed.content[0].text).layout.css.gap, '32px');
   const screenshot = await client.callTool({ name: 'get_screenshot', arguments: {} });
   assert.equal(screenshot.content[0].mimeType, 'image/png'); assert.equal(screenshot.content[0].data, PNG);
   const assets = await client.callTool({ name: 'export_assets', arguments: { nodeIds: ['1:1', 'missing'], format: 'SVG' } });

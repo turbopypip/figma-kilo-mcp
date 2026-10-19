@@ -4,7 +4,7 @@ import vm from 'node:vm';
 import { readFile } from 'node:fs/promises';
 import { figmaAction } from '../extension/dom.js';
 
-function browserFixture({ url = 'https://www.figma.com/design/test/File', selectedId = '1:1', clipboard = '', focused = true, capture, exportCollapsed = false } = {}) {
+function browserFixture({ url = 'https://www.figma.com/design/test/File', selectedId = '1:1', clipboard = '', focused = true, capture, exportCollapsed = false, tooltipValue } = {}) {
   const calls = { read: 0, write: 0, click: 0 };
   let exportOpen = false;
   const labeled = (text, selected = null) => ({
@@ -24,6 +24,11 @@ function browserFixture({ url = 'https://www.figma.com/design/test/File', select
     click: () => { calls.click++; },
   }));
   const panel = { getClientRects: () => [1], getAttribute: () => 'properties-inspection-panel', innerText: 'Layout\nWidth\n100px\nHeight\n200px' };
+  if (tooltipValue !== undefined) {
+    const pill = { innerText: 'Spacing/sp-xl', querySelectorAll: () => [{ getAttribute: () => tooltipValue }] };
+    panel.innerText = 'Padding Top Spacing/sp-xl';
+    panel.querySelectorAll = selector => selector === 'button[aria-label]' ? [{ getAttribute: () => 'Copy Padding—Top: Spacing/sp-xl', querySelector: () => pill }] : [pill];
+  }
   const document = {
     hasFocus: () => focused,
     querySelector: () => ({ getAttribute: () => 'Figma Design, 1 item selected' }),
@@ -89,4 +94,13 @@ test('SVG preparation opens a collapsed Export panel through pointer/mouse activ
   const result = await run('prepare_svg');
   assert.equal(result.result.id, '1:1');
   assert.equal(calls.click, 1);
+});
+
+test('current tooltip attribute replaces Figma naming without cached/hardcoded values', async () => {
+  for (const actual of ['32px', '40px', '']) {
+    const { run } = browserFixture({ tooltipValue: actual });
+    const { result } = await run('get_design_context');
+    assert.equal(result.properties[0].fields[0].value, actual || 'unavailable');
+    assert.equal(JSON.stringify(result).includes('Spacing/sp-xl'), false);
+  }
 });

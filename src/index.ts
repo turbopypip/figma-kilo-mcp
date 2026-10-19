@@ -8,7 +8,7 @@ import { createServer } from './server.js';
 
 const configSchema = z.object({ secret: z.string().min(32).max(256),
   assetDirectory: z.string().min(1), port: z.number().int().min(1024).max(65535).default(3055),
-  adapter: z.literal('browser').default('browser') });
+  variablesFile: z.string().min(1).optional(), adapter: z.literal('browser').default('browser') });
 async function main() {
   const configPath = process.env.FIGMA_KILO_CONFIG || fileURLToPath(new URL('../.local/config.json', import.meta.url));
   const config = configSchema.parse(JSON.parse(await readFile(configPath, 'utf8')));
@@ -16,7 +16,7 @@ async function main() {
   const bridge = new Bridge(config.secret, config.port);
   try { await bridge.ready; }
   catch { throw new Error(`Cannot listen on 127.0.0.1:${config.port}. Close the other MCP session or change the port in the server and extension.`); }
-  const handle = serveStdio(() => createServer(bridge, assets), { onerror: () => console.error('MCP transport error') });
+  const handle = serveStdio(() => createServer(bridge, assets, config.variablesFile), { onerror: () => console.error('MCP transport error') });
   let closing = false;
   const close = async () => {
     if (closing) return;

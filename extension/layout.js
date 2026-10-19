@@ -1,6 +1,6 @@
 // Convert inspected labels, never canvas guesses, into reusable CSS information.
 export function parseLayout(properties = []) {
-  const fields = properties.filter(p => p.section === 'properties-inspection-panel').flatMap(p => p.fields || []);
+  const fields = properties.filter(p => p.section === 'properties-inspection-panel' || p.section === 'typography-inspection-panel').flatMap(p => p.fields || []);
   const css = {}, sizing = {}, unresolved = [], hints = [], source = {};
   const length = value => {
     const normalized = value.replace(/(?<=\d),(?=\d{3}(?:\D|$))/g, '');
@@ -12,6 +12,7 @@ export function parseLayout(properties = []) {
     'Padding—Bottom': 'padding-bottom', 'Padding—Left': 'padding-left',
     'Min width': 'min-width', 'Max width': 'max-width', 'Min height': 'min-height', 'Max height': 'max-height',
     'Corner radius': 'border-radius', 'Radius': 'border-radius',
+    'Font size': 'font-size', 'Line height': 'line-height', 'Letter spacing': 'letter-spacing',
   };
   for (const { name, value } of fields) {
     source[name] = value;
@@ -35,6 +36,8 @@ export function parseLayout(properties = []) {
       }
     } else if ((name === 'Justify' || name === 'Align') && /^(flex-start|flex-end|start|end|center|space-between|space-around|space-evenly|stretch|baseline)$/.test(value)) {
       css[name === 'Justify' ? 'justify-content' : 'align-items'] = value;
+    } else if (name === 'Font weight' && /^(?:[1-9]00)$/.test(value)) {
+      css['font-weight'] = value;
     } else if (mappings[name]) {
       const property = mappings[name], resolved = length(value);
       if (resolved) css[property] = resolved;

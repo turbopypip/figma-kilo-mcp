@@ -41,7 +41,7 @@ function fixture({ interrupt = false, inspectorDelay = 0 } = {}) {
       if (selector === '[role="row"]') return visible().slice(Math.floor(top / 20), Math.floor(top / 20) + 3).map(row);
       if (selector === '[role="tab"]') return [label('Properties')];
       if (selector === 'button,[role="button"]') return [label(selected)];
-      if (selector === '[data-testid$="inspection-panel"]') return [{ getClientRects: () => [1], getAttribute: () => 'properties-inspection-panel', innerText: `Width of ${inspector}`, querySelectorAll: () => [label(`Copy Width: ${inspector.length}px`)] }];
+      if (selector === '[data-testid$="inspection-panel"]') return [{ getClientRects: () => [1], getAttribute: () => 'properties-inspection-panel', innerText: `Width of ${inspector}`, querySelectorAll: selector => selector === 'button[aria-label]' ? [label(`Copy Width: ${inspector.length}px`)] : [] }];
       throw new Error(`Unexpected query: ${selector}`);
     },
   };

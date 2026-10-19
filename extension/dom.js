@@ -53,9 +53,26 @@ export async function figmaAction(method, params, fileKey) {
     };
     const button = text => [...document.querySelectorAll('button,[role="button"]')].find(el => visible(el) && label(el) === text);
     const readFields = panel => [...(panel.querySelectorAll?.('button[aria-label]') || [])]
-      .map(el => el.getAttribute('aria-label') || '')
-      .filter(value => value.startsWith('Copy ') && value.includes(':'))
-      .slice(0, 100).map(value => { const colon = value.indexOf(':'); return { name: value.slice(5, colon).trim(), value: value.slice(colon + 1).trim().slice(0, 1000) }; });
+      .filter(el => (el.getAttribute('aria-label') || '').startsWith('Copy ') && el.getAttribute('aria-label').includes(':'))
+      .slice(0, 100).map(el => {
+        const label = el.getAttribute('aria-label'), colon = label.indexOf(':');
+        const pill = el.querySelector?.('[data-testid="inspectionPropertyValue"] [data-testid="variable-pill-root"]');
+        const values = pill ? [...pill.querySelectorAll('[data-tooltip]')].map(item => item.getAttribute('data-tooltip').trim()).filter(Boolean) : [];
+        const unique = [...new Set(values)];
+        return { name: label.slice(5, colon).trim(),
+          value: pill ? (unique.length === 1 ? unique[0].slice(0, 1000) : 'unavailable') : label.slice(colon + 1).trim().slice(0, 1000),
+          ...(pill ? { valueSource: unique.length === 1 ? 'tooltip-attribute' : 'unavailable' } : {}) };
+      });
+    // Replace variable labels in the text snapshot too; never expose them as CSS candidates.
+    const panelText = panel => {
+      let text = panel.innerText;
+      for (const pill of panel.querySelectorAll?.('[data-testid="variable-pill-root"]') || []) {
+        const values = [...pill.querySelectorAll('[data-tooltip]')].map(el => el.getAttribute('data-tooltip').trim()).filter(Boolean);
+        const unique = [...new Set(values)];
+        if (pill.innerText) text = text.replaceAll(pill.innerText, unique.length === 1 ? unique[0] : 'unavailable');
+      }
+      return text;
+    };
     const selection = () => ({ adapter: 'chrome-dom', fileKey, nodes: selected().map(describe),
       incomplete: true, limitation: 'Only selected rows currently mounted in the Layers panel are visible to this adapter.' });
     if (method === 'get_selection') return { result: selection() };
@@ -235,7 +252,7 @@ export async function figmaAction(method, params, fileKey) {
               if (!panels.length) throw new Error('Inspector DOM is unsupported.');
               const properties = [];
               for (const panel of panels) {
-                const raw = panel.innerText, available = Math.max(0, 150_000 - textLength);
+                const raw = panelText(panel), available = Math.max(0, 150_000 - textLength);
                 const text = raw.slice(0, Math.min(12_000, available)); textLength += text.length;
                 if (text.length < raw.length) reasons.push(`Properties text truncated: ${info.id}`);
                 properties.push({ section: panel.getAttribute('data-testid'), text, fields: readFields(panel) });
@@ -297,7 +314,7 @@ export async function figmaAction(method, params, fileKey) {
       const panels = [...document.querySelectorAll('[data-testid$="inspection-panel"]')].filter(visible)
         .filter(el => !el.getAttribute('data-testid').startsWith('export-'));
       if (!panels.length) throw new Error('Inspector DOM is unsupported. No context returned; update the browser adapter.');
-      const properties = panels.map(el => ({ section: el.getAttribute('data-testid'), text: el.innerText.slice(0, 12000), fields: readFields(el) }));
+      const properties = panels.map(el => ({ section: el.getAttribute('data-testid'), text: panelText(el).slice(0, 12000), fields: readFields(el) }));
       assertSelection();
       return { result: { adapter: 'chrome-dom', fileKey, node, properties, visibleDescendants: descendants,
         nodeCount: 1 + descendants.length, truncated: true, childrenTruncated: true,

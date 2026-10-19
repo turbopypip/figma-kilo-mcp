@@ -56,8 +56,8 @@ try {
         continue;
       }
       const selection = JSON.parse((await call('get_selection')).content[0].text);
-      if (selection.nodes.length !== 1) throw new Error('Select exactly one visible layer.');
-      const nodeId = selection.nodes[0].id;
+      if (selection.nodes.length !== 1 && !selectionLink && command.trim() !== 'continue') throw new Error('Select exactly one visible layer.');
+      const nodeId = selection.nodes[0]?.id;
       const context = JSON.parse((await call('get_design_context', command.trim() === 'continue' ? (continuation || (() => { throw new Error('No continuation pending'); })()) : { ...(selectionLink ? { url: selectionLink } : { nodeId }), depth: contextOnly ? 6 : 1, maxNodes: contextOnly ? 100 : 20 })).content[0].text);
       const out = path.join(root, 'artifacts'); await mkdir(out, { recursive: true });
       await writeFile(path.join(out, `${evidencePrefix}-context.json`), JSON.stringify({ selection, context }, null, 2));
