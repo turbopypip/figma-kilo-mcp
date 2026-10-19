@@ -3,24 +3,24 @@ import assert from 'node:assert/strict';
 import { once } from 'node:events';
 import { WebSocket } from 'ws';
 import { Bridge } from '../dist/bridge.js';
-import { pair, fixture } from './helpers.mjs';
+import { pair, mockBrowser } from './helpers.mjs';
 const secret = 'a'.repeat(64);
 async function bridge(t, timeout = 1000) {
   const b = new Bridge(secret, 0, timeout); await b.ready; t.after(() => b.close()); return b;
 }
-test('unauthenticated peer rejected; reconnect works; duplicate cannot displace plugin', async t => {
+test('unauthenticated peer rejected; reconnect works; duplicate cannot displace browser extension', async t => {
   const b = await bridge(t);
   await assert.rejects(b.request('get_selection', {}), /not connected/);
   const bad = new WebSocket(`ws://127.0.0.1:${b.port}`); await once(bad, 'open');
   const rejected = once(bad, 'close'); bad.send(JSON.stringify({ type: 'auth', secret: 'wrong' }));
   assert.equal((await rejected)[0], 1008);
-  const peer = await pair(b.port, secret, fixture().figma);
+  const peer = await pair(b.port, secret, mockBrowser);
   const duplicate = new WebSocket(`ws://127.0.0.1:${b.port}`); await once(duplicate, 'open');
   const dupClosed = once(duplicate, 'close'); duplicate.send(JSON.stringify({ type: 'auth', secret }));
   assert.equal((await dupClosed)[0], 1008);
   assert.equal((await b.request('get_selection', {})).nodes[0].id, '1:1');
   const closed = once(peer, 'close'); peer.close(); await closed;
-  await pair(b.port, secret, fixture().figma);
+  await pair(b.port, secret, mockBrowser);
   assert.equal((await b.request('get_selection', {})).total, 1);
 });
 test('busy, abort, timeout and disconnect release pending state', async t => {
@@ -48,6 +48,6 @@ test('malformed and oversized messages disconnect safely', async t => {
   let closed = once(peer, 'close'); peer.send('{invalid'); assert.equal((await closed)[0], 1008);
   peer = await pair(b.port, secret);
   closed = once(peer, 'close'); peer.send('x'.repeat(6 * 1024 * 1024 + 1)); assert.equal((await closed)[0], 1009);
-  await pair(b.port, secret, fixture().figma);
+  await pair(b.port, secret, mockBrowser);
   assert.equal((await b.request('get_selection', {})).total, 1);
 });

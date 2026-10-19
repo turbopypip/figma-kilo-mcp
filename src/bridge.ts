@@ -16,7 +16,7 @@ export class Bridge {
     });
     this.server.on('error', () => {});
     this.server.on('connection', socket => {
-      // Unauthenticated connections have a short lifetime and cannot displace a paired plugin.
+      // Unauthenticated connections have a short lifetime and cannot displace a paired browser extension.
       if (this.server.clients.size > 8) { socket.terminate(); return; }
       let authenticated = false;
       const timer = setTimeout(() => socket.terminate(), 3000);
@@ -25,7 +25,7 @@ export class Bridge {
         clearTimeout(timer);
         if (this.peer === socket) {
           this.peer = undefined;
-          this.pending?.finish(new Error('Figma plugin disconnected. Reconnect the plugin.'));
+          this.pending?.finish(new Error('Figma browser extension disconnected. Reconnect the browser extension.'));
         }
       });
       socket.on('message', raw => {
@@ -36,7 +36,7 @@ export class Bridge {
             const expected = Buffer.from(this.secret);
             if (msg.type !== 'auth' || supplied.length !== expected.length ||
                 !timingSafeEqual(supplied, expected) || this.peer) {
-              socket.close(1008, 'Pairing failed or another plugin is connected'); return;
+              socket.close(1008, 'Pairing failed or another browser extension is connected'); return;
             }
             authenticated = true;
             clearTimeout(timer);
@@ -56,14 +56,14 @@ export class Bridge {
     if (signal?.aborted) return Promise.reject(new Error('Request cancelled'));
     const peer = this.peer;
     if (!peer || peer.readyState !== WebSocket.OPEN) return Promise.reject(new Error(
-      'Figma plugin is not connected. Open the document, run Figma Kilo Bridge and pair it using the local secret.'));
+      'Figma browser extension is not connected. Open the file in Chrome, click Figma Kilo Browser Bridge and pair it using the local secret.'));
     if (this.pending) return Promise.reject(new Error('Figma is busy. Wait for the current request.'));
     return new Promise((resolve, reject) => {
       const id = randomUUID();
       const cancel = () => {
-        // exportAsync cannot be interrupted. Disconnect so repeated cancellations cannot queue work.
+        // Native Figma copy cannot be interrupted. Disconnect so repeated cancellations cannot queue work.
         peer.terminate();
-        finish(new Error(signal?.aborted ? 'Request cancelled; reconnect plugin.' : 'Figma request timed out; reconnect plugin.'));
+        finish(new Error(signal?.aborted ? 'Request cancelled; reconnect browser extension.' : 'Figma request timed out; reconnect browser extension.'));
       };
       const timer = setTimeout(cancel, this.timeout);
       const finish = (error?: Error, value?: unknown) => {

@@ -1,7 +1,5 @@
 node_modules/
 dist/
-plugin/code.js
-plugin/ui.html
 .local/
 artifacts/
 *.log

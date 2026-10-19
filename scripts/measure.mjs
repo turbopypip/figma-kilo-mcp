@@ -5,7 +5,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createInterface } from 'node:readline/promises';
 import { once } from 'node:events';
-import { fixture, pair } from '../tests/helpers.mjs';
+import { mockBrowser, pair } from '../tests/helpers.mjs';
 const real = process.argv.includes('--real');
 const root = fileURLToPath(new URL('../', import.meta.url));
 const temp = await mkdtemp(path.join(tmpdir(), 'figma-measure-'));
@@ -52,8 +52,8 @@ try {
   child.stdin.write(JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' }) + '\n');
   if (real) {
     const rl = createInterface({ input: process.stdin, output: process.stdout });
-    await rl.question('Close Kilo first. Connect the Figma plugin to this server, select one frame, then press Enter. '); rl.close();
-  } else peer = await pair(config.port, config.secret, fixture().figma);
+    await rl.question('Close Kilo first. Connect the Figma browser extension to this server, select one frame, then press Enter. '); rl.close();
+  } else peer = await pair(config.port, config.secret, mockBrowser);
   const selection = JSON.parse((await call('get_selection')).content[0].text);
   console.error('Measuring 60 seconds idle (no Figma polling)…');
   const before = await metrics(), idleStart = performance.now();
@@ -71,11 +71,11 @@ try {
     batches.push({ requests: 20, elapsedMs, cpuPercent: cpuPercent(start, end, elapsedMs), rssMiB: end.memory.rss / 2 ** 20,
       peakRssMiB: end.usage.maxRSS / 1024, contextChars, imageBytes });
   }
-  const report = { date: new Date().toISOString(), mode: real ? 'real Figma Plugin API' : 'mock Figma API; real stdio MCP and WebSocket',
+  const report = { date: new Date().toISOString(), mode: real ? 'real Chrome DOM/clipboard' : 'mock browser adapter; real stdio MCP and WebSocket',
     os: { platform: platform(), release: release(), arch: arch(), cpu: cpus()[0]?.model, ramGiB: totalmem() / 2 ** 30, node: process.version },
-    selection, fixture: real ? null : { nodes: 2, frame: '4000x2000', png: 'mock 1x1 PNG; requested scale 1; applied scale 0.512' },
+    selection, fixture: real ? null : { nodes: 2, png: 'mock 1x1 PNG' },
     idle: { seconds: idleMs / 1000, cpuPercent: cpuPercent(before, after, idleMs), rssMiB: after.memory.rss / 2 ** 20 }, batches,
-    notes: ['Metrics cover server process only, including benchmark IPC listener.', 'maxRSS is cumulative process high-water mark, not a per-phase peak.', 'Plugin CPU/RAM and real render cost are not measured in mock mode.', 'Three batches are a smoke check, not proof of long-term memory stability.'] };
+    notes: ['Metrics cover server process only, including benchmark IPC listener.', 'maxRSS is cumulative process high-water mark, not a per-phase peak.', 'Chrome extension CPU/RAM and real render cost are not measured in mock mode.', 'Three batches are a smoke check, not proof of long-term memory stability.'] };
   await mkdir(path.join(root, 'artifacts'), { recursive: true });
   const target = path.join(root, 'artifacts', real ? 'resources-real.json' : 'resources-mock.json');
   await writeFile(target, JSON.stringify(report, null, 2) + '\n'); console.log(JSON.stringify(report, null, 2));

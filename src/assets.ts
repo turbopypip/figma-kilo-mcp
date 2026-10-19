@@ -6,7 +6,7 @@ import { z } from 'zod';
 
 export const imageSchema = z.object({ nodeId: z.string().max(100), name: z.string().max(500),
   format: z.enum(['PNG', 'SVG']), data: z.string().max(4 * 1024 * 1024),
-  scale: z.number().positive().optional() });
+  scale: z.number().positive().optional(), scaleBasis: z.literal('clipboard').optional() });
 export function decodeImage(value: unknown) {
   const image = imageSchema.parse(value);
   if (image.data.length % 4 !== 0 || /[^A-Za-z0-9+/=]/.test(image.data))
@@ -38,6 +38,6 @@ export class AssetStore {
     try { await handle.writeFile(image.bytes); }
     catch (error) { await handle.close(); await unlink(target).catch(() => {}); throw error; }
     await handle.close();
-    return { nodeId: image.nodeId, path: target, bytes: image.bytes.length, format: image.format, scale: image.scale };
+    return { nodeId: image.nodeId, path: target, bytes: image.bytes.length, format: image.format, scale: image.scale, scaleBasis: image.scaleBasis };
   }
 }

@@ -6,7 +6,7 @@ import path from 'node:path';
 import net from 'node:net';
 import { Client } from '@modelcontextprotocol/client';
 import { StdioClientTransport } from '@modelcontextprotocol/client/stdio';
-import { pair, fixture, PNG } from './helpers.mjs';
+import { pair, mockBrowser, PNG } from './helpers.mjs';
 test('real stdio MCP session: discovery, context, image, disk export, EOF cleanup', { timeout: 20000 }, async t => {
   const dir = await mkdtemp(path.join(tmpdir(), 'figma MCP тест '));
   t.after(() => rm(dir, { recursive: true, force: true }));
@@ -25,7 +25,7 @@ test('real stdio MCP session: discovery, context, image, disk export, EOF cleanu
   assert.equal(absent.isError, true); assert.match(absent.content[0].text, /not connected/);
   const invalid = await client.callTool({ name: 'get_design_context', arguments: { depth: 100 } });
   assert.equal(invalid.isError, true);
-  const ws = await pair(port, secret, fixture().figma); t.after(() => ws.terminate());
+  const ws = await pair(port, secret, mockBrowser); t.after(() => ws.terminate());
   const selection = await client.callTool({ name: 'get_selection', arguments: {} });
   assert.equal(JSON.parse(selection.content[0].text).nodes[0].id, '1:1');
   const context = await client.callTool({ name: 'get_design_context', arguments: {} });
@@ -34,7 +34,7 @@ test('real stdio MCP session: discovery, context, image, disk export, EOF cleanu
   assert.equal(screenshot.content[0].mimeType, 'image/png'); assert.equal(screenshot.content[0].data, PNG);
   const assets = await client.callTool({ name: 'export_assets', arguments: { nodeIds: ['1:1', 'missing'], format: 'SVG' } });
   const result = JSON.parse(assets.content[0].text);
-  assert.match(await readFile(result.results[0].path, 'utf8'), /<svg/); assert.match(result.results[1].error, /no longer exists/);
+  assert.match(await readFile(result.results[0].path, 'utf8'), /<svg/); assert.match(result.results[1].error, /not mounted/);
   assert.equal(diagnostics.includes(secret), false);
   const pid = transport.pid;
   await client.close();

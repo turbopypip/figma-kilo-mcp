@@ -1,0 +1,12 @@
+{
+  "manifest_version": 3,
+  "name": "Figma Kilo Browser Bridge",
+  "version": "0.2.0",
+  "description": "Connect an explicitly selected Figma tab to a local Kilo CLI MCP server.",
+  "permissions": ["activeTab", "scripting", "clipboardRead", "clipboardWrite"],
+  "action": { "default_title": "Connect this Figma file to Kilo" },
+  "background": { "service_worker": "background.js", "type": "module" },
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'none'; connect-src ws://127.0.0.1:*"
+  }
+}
