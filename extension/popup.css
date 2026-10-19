@@ -1,0 +1,9 @@
+body { width: 360px; margin: 0; }
+[hidden] { display: none !important; }
+main { margin: 0; padding: 16px; }
+h1 { font-size: 19px; margin: 0 0 12px; }
+label { margin: 12px 0; font-size: 14px; }
+button { padding: 8px 12px; margin: 4px 4px 0 0; }
+.secondary { display: flex; align-items: center; gap: 16px; margin-top: 12px; }
+.secondary button { margin: 0; font-size: 12px; }
+#target { font-size: 13px; overflow-wrap: anywhere; }

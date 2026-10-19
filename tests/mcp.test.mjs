@@ -20,7 +20,10 @@ test('real stdio MCP session: discovery, context, image, disk export, EOF cleanu
   const client = new Client({ name: 'integration-test', version: '1.0.0' });
   t.after(() => client.close()); await client.connect(transport);
   const { tools } = await client.listTools();
-  assert.deepEqual(tools.map(t => t.name).sort(), ['export_assets', 'get_design_context', 'get_screenshot', 'get_selection']);
+  assert.deepEqual(tools.map(t => t.name).sort(), ['export_assets', 'get_connection_status', 'get_design_context', 'get_screenshot', 'get_selection']);
+  const status = async () => JSON.parse((await client.callTool({name: 'get_connection_status', arguments: {}})).content[0].text);
+  assert.equal((await status()).state, 'disconnected');
+  assert.equal((await status()).mcp, 'running');
   const absent = await client.callTool({ name: 'get_selection', arguments: {} });
   assert.equal(absent.isError, true); assert.match(absent.content[0].text, /not connected/);
   const invalid = await client.callTool({ name: 'get_design_context', arguments: { depth: 100 } });
@@ -30,6 +33,8 @@ test('real stdio MCP session: discovery, context, image, disk export, EOF cleanu
     const result = mockBrowser(method, params);
     return method === 'get_design_context' ? { ...result, layout: { css: {gap:'32px'} } } : result;
   }); t.after(() => ws.terminate());
+  assert.equal((await status()).state, 'connected');
+  assert.equal(JSON.stringify(await status()).includes(secret), false);
   const selection = await client.callTool({ name: 'get_selection', arguments: {} });
   assert.equal(JSON.parse(selection.content[0].text).nodes[0].id, '1:1');
   const context = await client.callTool({ name: 'get_design_context', arguments: {} });

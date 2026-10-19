@@ -1,0 +1,16 @@
+<!doctype html>
+<html lang="ru"><meta charset="utf-8"><title>Figma → Kilo CLI</title>
+<link rel="stylesheet" href="style.css"><link rel="stylesheet" href="popup.css">
+<main>
+<h1>Figma → Kilo CLI</h1>
+<p id="status" role="status">Проверяю соединение…</p>
+<p id="target"></p>
+<form id="connect">
+<label>Порт MCP<input id="port" type="number" min="1024" max="65535" value="3055" required></label>
+<div id="saved-secret" hidden><p>Секрет сохранён</p><button id="change-secret" type="button">Ввести новый секрет</button></div>
+<label id="secret-field">Секрет<input id="secret" type="password" autocomplete="off" minlength="32" maxlength="256" placeholder="Вставь секрет подключения" required></label>
+<button id="submit" type="submit">Подключить</button>
+<button id="disconnect" type="button">Отключить</button>
+</form>
+<div class="secondary"><a href="https://github.com/turbopypip/figma-kilo-mcp#readme" target="_blank" rel="noopener noreferrer">Информация ↗</a><button id="forget" type="button">Забыть ключ</button></div>
+</main><script type="module" src="popup.js"></script></html>

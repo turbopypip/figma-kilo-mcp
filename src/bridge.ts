@@ -5,6 +5,8 @@ export const MAX_MESSAGE = 6 * 1024 * 1024;
 export class Bridge {
   private server: WebSocketServer;
   private peer?: WebSocket;
+  private connectedAt: string | null = null;
+  private disconnectedAt: string | null = null;
   private pending?: { id: string; finish: (error?: Error, value?: unknown) => void };
   readonly ready: Promise<void>;
   constructor(private secret: string, port = 3055, private timeout = 30_000) {
@@ -25,6 +27,8 @@ export class Bridge {
         clearTimeout(timer);
         if (this.peer === socket) {
           this.peer = undefined;
+          this.connectedAt = null;
+          this.disconnectedAt = new Date().toISOString();
           this.pending?.finish(new Error('Figma browser extension disconnected. Reconnect the browser extension.'));
         }
       });
@@ -41,9 +45,11 @@ export class Bridge {
             authenticated = true;
             clearTimeout(timer);
             this.peer = socket;
+            this.connectedAt = new Date().toISOString();
             socket.send(JSON.stringify({ type: 'ready' }));
             return;
           }
+          if (msg.type === 'ping') { socket.send(JSON.stringify({ type: 'pong' })); return; }
           if (msg.type !== 'response' || msg.id !== this.pending?.id) return;
           if (typeof msg.error === 'string') this.pending?.finish(new Error(msg.error.slice(0, 500)));
           else this.pending?.finish(undefined, msg.result);
@@ -52,6 +58,18 @@ export class Bridge {
     });
   }
   get port(): number { return (this.server.address() as { port: number }).port; }
+  get status() {
+    const connected = this.peer?.readyState === WebSocket.OPEN;
+    const busy = connected && !!this.pending;
+    return {
+      connected, busy, state: connected ? (busy ? 'busy' : 'connected') : 'disconnected',
+      checkedAt: new Date().toISOString(), connectedAt: connected ? this.connectedAt : null,
+      disconnectedAt: this.disconnectedAt,
+      message: connected ? (busy ? 'Figma подключена, выполняется запрос.' : 'Расширение Figma подключено.')
+        : 'Расширение Figma не подключено. Открой макет и нажми значок расширения; сохранённый ключ загрузится автоматически. Если вкладка подключения уже открыта, дождись восстановления связи или нажми «Подключить».',
+      scope: 'Authenticated browser bridge connection only; Figma tab availability and export readiness are not checked.'
+    };
+  }
   request(method: string, params: unknown, signal?: AbortSignal): Promise<unknown> {
     if (signal?.aborted) return Promise.reject(new Error('Request cancelled'));
     const peer = this.peer;
@@ -81,6 +99,9 @@ export class Bridge {
   }
   async close(): Promise<void> {
     this.pending?.finish(new Error('Server is shutting down'));
+    this.peer = undefined;
+    this.connectedAt = null;
+    this.disconnectedAt = new Date().toISOString();
     for (const socket of this.server.clients) socket.terminate();
     await new Promise<void>(resolve => this.server.close(() => resolve()));
   }

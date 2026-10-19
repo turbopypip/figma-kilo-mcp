@@ -1,11 +1,11 @@
-chrome.action.onClicked.addListener(async tab => {
-  const isFile = tab.id && /^https:\/\/www\.figma\.com\/(design|file)\/[^/]+/.test(tab.url || '');
-  const fileKey = isFile ? new URL(tab.url).pathname.split('/')[2] : null;
-  const page = isFile ? `connect.html?tab=${tab.id}&file=${encodeURIComponent(fileKey)}` : 'connect.html?error=not-file';
-  try {
-    await chrome.tabs.create({ url: chrome.runtime.getURL(page) });
-  } catch {
-    await chrome.action.setBadgeText({ tabId: tab.id, text: '!' });
-    await chrome.action.setTitle({ tabId: tab.id, title: 'Не удалось открыть подключение. Перезагрузи расширение и попробуй снова.' });
-  }
+import { createStatusBadge } from './badge.js';
+import { createConnection } from './connection.js';
+const connection = createConnection(chrome, { onState: createStatusBadge(chrome) });
+chrome.runtime.onMessage.addListener((message, sender, reply) => {
+  if (message?.type !== 'bridge-control' || sender.id !== chrome.runtime.id || sender.url !== chrome.runtime.getURL('popup.html')) return;
+  void connection.control(message).then(reply, () => reply({ error: 'Не удалось выполнить действие.' }));
+  return true;
 });
+chrome.alarms.onAlarm.addListener(alarm => { if (alarm.name === 'bridge-reconnect') void connection.wake(); });
+chrome.tabs.onRemoved.addListener(id => { void connection.tabChanged(id, {}, undefined); });
+chrome.tabs.onUpdated.addListener((id, change, tab) => { void connection.tabChanged(id, change, tab); });

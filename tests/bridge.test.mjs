@@ -51,3 +51,42 @@ test('malformed and oversized messages disconnect safely', async t => {
   await pair(b.port, secret, mockBrowser);
   assert.equal((await b.request('get_selection', {})).total, 1);
 });
+
+test('status reflects authentication, busy work, disconnect and reconnect without browser requests', async t => {
+  const b = await bridge(t);
+  assert.equal(b.status.state, 'disconnected');
+  const unauthenticated = new WebSocket(`ws://127.0.0.1:${b.port}`);
+  await once(unauthenticated, 'open');
+  assert.equal(b.status.connected, false);
+  unauthenticated.close();
+  let messages = 0;
+  const peer = await pair(b.port, secret);
+  peer.on('message', () => messages++);
+  assert.equal(b.status.state, 'connected');
+  assert.ok(b.status.connectedAt);
+  assert.equal(messages, 0);
+  const pending = b.request('get_selection', {});
+  const rejected = assert.rejects(pending, /disconnected/);
+  assert.equal(b.status.state, 'busy');
+  assert.equal(b.status.connected, true);
+  peer.close(); await rejected;
+  assert.equal(b.status.state, 'disconnected');
+  assert.equal(b.status.busy, false);
+  assert.ok(b.status.disconnectedAt);
+  await pair(b.port, secret, mockBrowser);
+  assert.equal(b.status.state, 'connected');
+  assert.equal(JSON.stringify(b.status).includes(secret), false);
+});
+test('keepalive pong does not complete or replace a pending request', async t => {
+  const b = await bridge(t);
+  const peer = await pair(b.port, secret);
+  const incoming = once(peer, 'message');
+  const pending = b.request('get_selection', {});
+  const request = JSON.parse((await incoming)[0].toString());
+  const pong = once(peer, 'message');
+  peer.send(JSON.stringify({type:'ping'}));
+  assert.deepEqual(JSON.parse((await pong)[0].toString()), {type:'pong'});
+  assert.equal(b.status.busy,true);
+  peer.send(JSON.stringify({type:'response',id:request.id,result:{ok:true}}));
+  assert.deepEqual(await pending,{ok:true});
+});
