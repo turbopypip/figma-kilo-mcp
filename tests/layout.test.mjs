@@ -34,3 +34,9 @@ test('explicit Fixed dimensions exposed by Figma become numeric CSS', () => {
   assert.equal(layout.css.height, '408px');
   assert.equal(layout.sizing.width.mode, 'fixed');
 });
+
+test('named font families are extracted without guessing unknown families', () => {
+  assert.equal(parseLayout(properties({'Font family':'Inter'})).css['font-family'],'Inter');
+  assert.equal(parseLayout(properties({'Font family':'Montserrat'})).css['font-family'],'Montserrat');
+  assert.equal(parseLayout(properties({'Font family':'Mixed'})).css['font-family'],undefined);
+});

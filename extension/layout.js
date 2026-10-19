@@ -36,6 +36,8 @@ export function parseLayout(properties = []) {
       }
     } else if ((name === 'Justify' || name === 'Align') && /^(flex-start|flex-end|start|end|center|space-between|space-around|space-evenly|stretch|baseline)$/.test(value)) {
       css[name === 'Justify' ? 'justify-content' : 'align-items'] = value;
+    } else if (name === 'Font family' && /^(Inter|Montserrat)$/i.test(value)) {
+      css['font-family'] = value;
     } else if (name === 'Font weight' && /^(?:[1-9]00)$/.test(value)) {
       css['font-weight'] = value;
     } else if (mappings[name]) {
