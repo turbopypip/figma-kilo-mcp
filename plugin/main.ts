@@ -1,5 +1,8 @@
 import { designContext } from './context';
-figma.showUI(__html__, { width: 340, height: 300, themeColors: true });
+// Inspect plugins use Figma's resizable sidebar instead of a fixed-size dialog.
+figma.showUI(__html__, figma.editorType === 'dev'
+  ? { themeColors: true }
+  : { width: 340, height: 300, themeColors: true });
 let busy = false;
 let generation = 0;
 function bounded(value: unknown, fallback: number, min: number, max: number): number {
@@ -45,7 +48,8 @@ figma.ui.onmessage = async message => {
     switch (message.method) {
       case 'get_selection': {
         const selection = figma.currentPage.selection;
-        result = { page: { id: figma.currentPage.id, name: figma.currentPage.name.slice(0, 500) },
+        result = { editorType: figma.editorType, mode: figma.mode,
+          skippedInvisibleInstanceChildren: figma.skipInvisibleInstanceChildren, page: { id: figma.currentPage.id, name: figma.currentPage.name.slice(0, 500) },
           nodes: selection.slice(0, 500).map(n => ({ id: n.id, name: n.name.slice(0, 500), type: n.type })),
           total: selection.length, truncated: selection.length > 500 };
         break;

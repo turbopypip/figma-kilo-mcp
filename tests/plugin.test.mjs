@@ -48,3 +48,20 @@ test('text and property limits are explicit; inaccessible component is marked', 
   result = await b.request('get_design_context', {});
   assert.match(result.node.mainComponent.unavailable, /inaccessible/);
 });
+test('Dev Mode uses inspect sidebar and all operations work with frozen scene nodes', async t => {
+  const b = new Bridge(secret, 0); await b.ready; t.after(() => b.close());
+  const f = fixture();
+  f.figma.editorType = 'dev'; f.figma.mode = 'inspect'; f.figma.skipInvisibleInstanceChildren = true;
+  let uiOptions;
+  f.figma.showUI = (_, options) => { uiOptions = options; };
+  Object.freeze(f.text); Object.freeze(f.frame.children); Object.freeze(f.frame);
+  await pair(b.port, secret, f.figma);
+  assert.equal(uiOptions.width, undefined);
+  assert.equal(uiOptions.themeColors, true);
+  const selection = await b.request('get_selection', {});
+  assert.equal(selection.mode, 'inspect');
+  assert.equal(selection.skippedInvisibleInstanceChildren, true);
+  assert.equal((await b.request('get_design_context', {})).nodeCount, 2);
+  assert.equal((await b.request('get_screenshot', {})).format, 'PNG');
+  assert.equal((await b.request('export_asset', { nodeId: '1:1', format: 'SVG' })).format, 'SVG');
+});

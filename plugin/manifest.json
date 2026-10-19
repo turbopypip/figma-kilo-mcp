@@ -4,10 +4,20 @@
   "api": "1.0.0",
   "main": "code.js",
   "ui": "ui.html",
-  "editorType": ["figma"],
+  "editorType": [
+    "figma",
+    "dev"
+  ],
   "documentAccess": "dynamic-page",
   "networkAccess": {
-    "allowedDomains": ["none"],
-    "devAllowedDomains": ["ws://127.0.0.1:3055"]
-  }
+    "allowedDomains": [
+      "none"
+    ],
+    "devAllowedDomains": [
+      "ws://127.0.0.1:3055"
+    ]
+  },
+  "capabilities": [
+    "inspect"
+  ]
 }
