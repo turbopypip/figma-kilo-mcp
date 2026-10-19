@@ -1,0 +1,13 @@
+{
+  "mcp": {
+    "figma": {
+      "type": "local",
+      "command": ["node", "C:/tools/figma-kilo-mcp/dist/index.js"],
+      "enabled": true,
+      "environment": {
+        "FIGMA_KILO_CONFIG": "C:/tools/figma-kilo-mcp/.local/config.json"
+      },
+      "timeout": 60000
+    }
+  }
+}
